@@ -65,7 +65,7 @@ inValue ownInput = txOutValue ownInput
 
 {-# INLINABLE checkAmount #-}
 checkAmount :: Value -> Bool
-checkAmount val = (Ada.getLovelace (Ada.fromValue val)) > 1000000
+checkAmount val = (Ada.getLovelace $ Ada.fromValue val) > 1000000
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
@@ -126,7 +126,7 @@ empty r = do
     logInfo @String $ "Emptied piggy bank."
 
 inspect :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
-empty r = do
+inspect r = do
     utxos <- utxoAt scrAddress
     let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
