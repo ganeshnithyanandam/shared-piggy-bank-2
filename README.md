@@ -39,13 +39,13 @@ Here's an example of running and interacting with this contract via the API. For
 1. Compile the contract and build the server:
 
 ```
-cabal build server
+cabal build pb-two
 ```
 
 2. Run the PAB binary:
 
 ```
-cabal exec -- server
+cabal exec -- pb-two
 ````
 
 This will then start up the server on port 9080.
@@ -59,9 +59,13 @@ curl -s http://localhost:9080/api/contract/definitions | jq
 You should receive a list of contracts and the endpoints that can be called on them, and the arguments
 required for those endpoints.
 
-We're interested in the `PiggyBankContract`.
+We're interested in the `PiggyBank2Contract`.
+
+The piggy bank has a restriction that you cannot withdraw unless it has accumulated at least 1 million lovelace.
 
 #### Put and empty
+
+### //TODO - Update
 
 After starting the PAB, you may want to run `./run.sh` to send some requests to the server.
 

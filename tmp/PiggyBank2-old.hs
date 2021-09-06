@@ -11,7 +11,7 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports   #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
-module Plutus.Contracts.PiggyBank (endpoints, PiggyBankSchema, MyRedeemer (..)) where
+module Plutus.Contracts.PiggyBank2 (endpoints, PiggyBank2Schema, MyRedeemer (..)) where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Map             as Map hiding (empty)
@@ -21,6 +21,7 @@ import           Plutus.Contract
 import           PlutusTx             (toBuiltinData)
 import qualified PlutusTx
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
+import qualified PlutusTx.Prelude     as Plutus
 import           Ledger               hiding (singleton)
 import           Ledger.Constraints   as Constraints
 import qualified Ledger.Typed.Scripts as Scripts
@@ -38,7 +39,24 @@ PlutusTx.makeIsDataIndexed ''MyRedeemer [('MyRedeemer, 0)]
 
 {-# INLINABLE mkValidator #-}
 mkValidator :: () -> MyRedeemer -> ScriptContext -> Bool
-mkValidator _ (MyRedeemer isValid) _ = isValid
+mkValidator _ (MyRedeemer isValid) ctx =
+    isValid &&
+    hasSufficientAmount
+
+    where
+      ownOutput :: TxOut
+      ownOutput = case getContinuingOutputs ctx of
+          [o] -> o
+          _   -> traceError "No utxo output found"
+
+      hasSufficientAmount :: Bool
+      hasSufficientAmount =
+        let
+          outVal = txOutValue ownOutput
+        in
+          (Ada.getLovelace (Ada.fromValue outVal)) > 100000000000
+
+
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
@@ -61,7 +79,7 @@ valHash = Scripts.validatorHash typedValidator
 scrAddress :: Ledger.Address
 scrAddress = scriptAddress validator
 
-type PiggyBankSchema =
+type PiggyBank2Schema =
             Endpoint "put" Integer
         .\/ Endpoint "empty" MyRedeemer
 
@@ -83,17 +101,17 @@ empty r = do
     void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ "Emptied piggy bank."
 
-put' :: Promise () PiggyBankSchema Text ()
+put' :: Promise () PiggyBank2Schema Text ()
 put' = endpoint @"put" put
 
-empty' :: Promise () PiggyBankSchema Text ()
+empty' :: Promise () PiggyBank2Schema Text ()
 empty' = endpoint @"empty" empty
 
-endpoints :: AsContractError e => Contract () PiggyBankSchema Text e
+endpoints :: AsContractError e => Contract () PiggyBank2Schema Text e
 endpoints = do
     logInfo @String "Waiting for put or empty."
     selectList [put', empty'] >>  endpoints
 
 -- these functions are used in the simulator
-mkSchemaDefinitions ''PiggyBankSchema
+mkSchemaDefinitions ''PiggyBank2Schema
 mkKnownCurrencies []
