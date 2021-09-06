@@ -9,5 +9,5 @@ curl -H "Content-Type: application/json" -X POST -d 199999 http://localhost:9080
 curl -H "Content-Type: application/json" -X POST -d 299999 http://localhost:9080/api/contract/instance/$W2/endpoint/put && sleep 4
 curl -H "Content-Type: application/json" -X POST -d "true" http://localhost:9080/api/contract/instance/$W3/endpoint/empty && sleep 4
 curl -H "Content-Type: application/json" -X POST -d 1000000 http://localhost:9080/api/contract/instance/$W2/endpoint/put && sleep 4
-curl -H "Content-Type: application/json" -X POST -d "true" http://localhost:9080/api/contract/instance/$W2/endpoint/inspect && sleep 4
+curl -H "Content-Type: application/json" -X POST -d "true" http://localhost:9080/api/contract/instance/$W4/endpoint/inspect && sleep 4
 curl -H "Content-Type: application/json" -X POST -d "true" http://localhost:9080/api/contract/instance/$W4/endpoint/empty

@@ -61,24 +61,28 @@ required for those endpoints.
 
 We're interested in the `PiggyBank2Contract`.
 
+## Run the PAB executable
+### Rule of this piggy bank 
 The piggy bank has a restriction that you cannot withdraw unless it has accumulated at least 1 million lovelace.
 
-#### Put and empty
-
-### //TODO - Update
+### Put, empty and inspect
 
 After starting the PAB, you may want to run `./run.sh` to send some requests to the server.
 
-First, we activate four distinct wallets. These wallets come with some ADA tokens.
-Next, two wallets put 99999900000 lovelaces (1 million lovelaces = 1 ADA) into the piggy bank.
+First, we activate four distinct wallets.
 
-Next, wallet 3 is trying to empty the piggy bank and claim the ADA in it.
-However, the data sent along the request is wrong, so in the log of the server we will see that the transaction didn't validate.
+Then in order this following requests and responses can be observed
 
-We're being very nice here, because that attempt actually didn't cost wallet 3 anything.
+- Wallet 1 puts 199999 lovelace
+- Wallet 2 puts 299999 lovelace
+- Wallet 3 tries to empty but not allowed since total < 1 M lovelace
+- Wallet 2 puts 1000000 lovelace.
+- Wallet 4 inspect the wallet with 'inspect' endpoint. It finds 1499998 lovelace in total
+- Wallet 4 tries to empty and is successful
+
+
+Note that:
+Wallet 3's failed attempt actually didn't cost it anything.
+
 A strong selling point for Cardano is that we can check quite a bit of information before data ever hits the chain.
 Anyone who spent hundreds of USD on a few occassions on a failed ETH transaction will appreciate this.
-
-Finally, wallet 4 creates a correct request and empties the piggy bank.
-
-Note that you can verify the balances by looking at the log of the server when exiting by pressing return.
