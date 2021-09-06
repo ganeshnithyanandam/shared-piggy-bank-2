@@ -40,7 +40,8 @@ library
       plutus-tx,
       plutus-ledger,
       text,
-      utf8-string
+      utf8-string,
+      plutus-ledger-api
     hs-source-dirs: src/
 
 executable pb-two
@@ -59,4 +60,5 @@ executable pb-two
     freer-simple -any,
     prettyprinter -any,
     freer-extras -any,
-    plutus-ledger -any
+    plutus-ledger -any,
+    plutus-ledger-api -any

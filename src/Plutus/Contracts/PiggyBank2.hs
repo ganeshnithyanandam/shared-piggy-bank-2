@@ -12,17 +12,16 @@
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
 module Plutus.Contracts.PiggyBank2
-(endpoints, PiggyBank2Schema, MyRedeemer (..)) where
+(inValue,checkAmount,endpoints, PiggyBank2Schema, MyRedeemer (..)) where
 
 import           Control.Monad        hiding (fmap)
 import           Data.Map             as Map hiding (empty)
-import           Data.Text            (Text)
+import           Data.Text            (Text, unpack)
 import           Data.Monoid          (Last (..))
 import           Data.Void            (Void)
 import           Plutus.Contract
 import           PlutusTx             (toBuiltinData)
 import qualified PlutusTx
-import qualified Data.Foldable        as DF
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import qualified PlutusTx.Prelude     as Plutus
 import           Ledger               hiding (singleton)
@@ -36,6 +35,8 @@ import           Prelude              (IO, Semigroup (..), String)
 import           Text.Printf          (printf)
 import           Data.Text.Prettyprint.Doc.Extras (PrettyShow (..))
 import           Prelude              (Semigroup (..), Show (..))
+import           Plutus.Contract       as Contract
+import           Plutus.V1.Ledger.Value (Value (..))
 
 newtype MyRedeemer = MyRedeemer Bool
     deriving (FromJSON, ToJSON, ToSchema)
@@ -56,10 +57,15 @@ mkValidator _ (MyRedeemer isValid) ctx =
 
       hasSufficientAmount :: Bool
       hasSufficientAmount =
-        let
-          inVal = txOutValue ownInput
-        in
-          (Ada.getLovelace (Ada.fromValue inVal)) > 1000000
+          traceIfFalse "Sorry. Not enough lovelace" $ checkAmount $ inValue ownInput
+
+{-# INLINABLE inValue #-}
+inValue :: TxOut -> Value
+inValue ownInput = txOutValue ownInput
+
+{-# INLINABLE checkAmount #-}
+checkAmount :: Value -> Bool
+checkAmount val = (Ada.getLovelace (Ada.fromValue val)) > 1000000
 
 data Typed
 instance Scripts.ValidatorTypes Typed where
@@ -89,7 +95,7 @@ type PiggyBank2Schema =
 put :: AsContractError e => Integer -> Contract w s e ()
 put amount = do
     utxos <- utxoAt scrAddress
-    let totalVal = DF.foldMap (txOutValue . txOutTxOut) utxos
+    let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
     logInfo @String $ "Putting to piggy bank currently holding "
             ++ show numInputs
@@ -103,10 +109,10 @@ put amount = do
 empty :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
 empty r = do
     utxos <- utxoAt scrAddress
-    let totalVal = DF.foldMap (txOutValue . txOutTxOut) utxos
+    let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
     logInfo @String
-        $ "Emptying piggy bank currently holding "
+        $ "Attempting to empty piggy bank currently holding "
             <> show numInputs
             <> " outputs with a total value of "
             <> show totalVal
@@ -116,8 +122,20 @@ empty r = do
         tx :: TxConstraints Void Void
         tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ toBuiltinData r | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
-    void $ awaitTxConfirmed $ txId ledgerTx
+    handleError (\err -> Contract.logInfo $ "caught error: " ++ unpack err) $ void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ "Emptied piggy bank."
+
+inspect :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
+empty r = do
+    utxos <- utxoAt scrAddress
+    let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
+        numInputs = Map.size utxos
+    logInfo @String
+        $ "Inspeting utxos at script address"
+            <> show numInputs
+            <> " outputs with a total value of "
+            <> show totalVal
+    logInfo @String $ "Inspect complete"
 
 put' :: Promise () PiggyBank2Schema Text ()
 put' = endpoint @"put" put
