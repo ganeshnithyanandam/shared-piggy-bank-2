@@ -50,13 +50,22 @@ mkValidator _ (MyRedeemer isValid) ctx =
     hasSufficientAmount
 
     where
+      ownInput :: TxOut
+      ownInput = case findOwnInput ctx of
+        Nothing -> traceError "There are no inputs to consume"
+        Just i  -> txInInfoResolved i
+
       hasSufficientAmount :: Bool
       hasSufficientAmount =
           traceIfFalse "Sorry. Not enough lovelace" $ checkAmount $ inValue ctx
 
 {-# INLINABLE inValue #-}
-inValue :: ScriptContext -> Value
+inValue :: TxOut -> Value
 inValue ctx = valueSpent (scriptContextTxInfo ctx)
+
+{-{-# INLINABLE inValue #-}
+inValue :: TxOut -> Value
+inValue ownInput = txOutValue ownInput-}
 
 {-# INLINABLE checkAmount #-}
 checkAmount :: Value -> Bool
