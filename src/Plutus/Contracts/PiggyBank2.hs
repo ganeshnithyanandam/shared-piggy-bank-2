@@ -22,7 +22,7 @@ import           Data.Void            (Void)
 import           Plutus.Contract
 import           PlutusTx             (toBuiltinData)
 import qualified PlutusTx
-import           PlutusTx.AssocMap    hiding (empty)
+import qualified Data.Foldable        as DF
 import           PlutusTx.Prelude     hiding (Semigroup(..), unless)
 import qualified PlutusTx.Prelude     as Plutus
 import           Ledger               hiding (singleton)
@@ -89,7 +89,7 @@ type PiggyBank2Schema =
 put :: AsContractError e => Integer -> Contract w s e ()
 put amount = do
     utxos <- utxoAt scrAddress
-    let totalVal = foldMap (txOutValue . txOutTxOut) utxos
+    let totalVal = DF.foldMap (txOutValue . txOutTxOut) utxos
         numInputs = Map.size utxos
     logInfo @String $ "Putting to piggy bank currently holding "
             ++ show numInputs
@@ -103,7 +103,7 @@ put amount = do
 empty :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
 empty r = do
     utxos <- utxoAt scrAddress
-    let totalVal = foldMap (txOutValue . txOutTxOut) utxos
+    let totalVal = DF.foldMap (txOutValue . txOutTxOut) utxos
         numInputs = Map.size utxos
     logInfo @String
         $ "Emptying piggy bank currently holding "
