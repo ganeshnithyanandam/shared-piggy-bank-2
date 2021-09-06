@@ -34,7 +34,6 @@ import           Playground.TH        (mkKnownCurrencies, mkSchemaDefinitions)
 import           Playground.Types     (KnownCurrency (..))
 import           Prelude              (IO, Semigroup (..), String)
 import           Text.Printf          (printf)
-import qualified Ledger.Contexts                  as V
 import           Data.Text.Prettyprint.Doc.Extras (PrettyShow (..))
 import           Prelude              (Semigroup (..), Show (..))
 
@@ -90,7 +89,7 @@ type PiggyBank2Schema =
 put :: AsContractError e => Integer -> Contract w s e ()
 put amount = do
     utxos <- utxoAt scrAddress
-    let totalVal = foldMap (V.txOutValue . txOutTxOut) utxos
+    let totalVal = foldMap (txOutValue . txOutTxOut) utxos
         numInputs = Map.size utxos
     logInfo @String $ "Putting to piggy bank currently holding "
             ++ show numInputs
@@ -104,7 +103,7 @@ put amount = do
 empty :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
 empty r = do
     utxos <- utxoAt scrAddress
-    let totalVal = foldMap (V.txOutValue . txOutTxOut) utxos
+    let totalVal = foldMap (txOutValue . txOutTxOut) utxos
         numInputs = Map.size utxos
     logInfo @String
         $ "Emptying piggy bank currently holding "
