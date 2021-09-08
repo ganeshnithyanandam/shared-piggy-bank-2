@@ -1,9 +1,6 @@
 {-# LANGUAGE DataKinds                     #-}
-{-# LANGUAGE DeriveAnyClass                #-}
-{-# LANGUAGE DeriveGeneric                 #-}
 {-# LANGUAGE FlexibleContexts              #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving    #-}
-{-# LANGUAGE MultiParamTypeClasses         #-}
 {-# LANGUAGE NoImplicitPrelude             #-}
 {-# LANGUAGE OverloadedStrings             #-}
 {-# LANGUAGE ScopedTypeVariables           #-}
@@ -14,16 +11,14 @@
 {-# OPTIONS_GHC -fno-warn-unused-imports   #-}
 {-# OPTIONS_GHC -fno-warn-unused-top-binds #-}
 
-module Plutus.Contracts.ParametrisedPiggyBank
-(inValue,checkAmount,endpoints, ParametrisedPiggyBankSchema, MyRedeemer (..)) where
+module Plutus.Contracts.PiggyBank2
+(inValue,checkAmount,endpoints, PiggyBank2Schema, MyRedeemer (..)) where
 
 import           Control.Monad        hiding (fmap)
-import           Data.Aeson           (ToJSON, FromJSON)
 import           Data.Map             as Map hiding (empty)
 import           Data.Text            (Text, unpack)
 import           Data.Monoid          (Last (..))
 import           Data.Void            (Void)
-import           GHC.Generics         (Generic)
 import           Plutus.Contract
 import           PlutusTx             (toBuiltinData)
 import qualified PlutusTx
@@ -43,37 +38,34 @@ import           Prelude              (Semigroup (..), Show (..))
 import           Plutus.Contract       as Contract
 import           Plutus.V1.Ledger.Value (Value (..), assetClass, assetClassValueOf)
 
-data PPBParam = PPBParam
-    { beneficiary :: PubKeyHash
-    } deriving Show
+newtype MyRedeemer = MyRedeemer Bool
+    deriving (FromJSON, ToJSON, ToSchema)
 
-{-newtype PPBParam = PPBParam PubKeyHash
-    deriving (Show)-}
-
-PlutusTx.makeLift ''PPBParam
-
+PlutusTx.makeIsDataIndexed ''MyRedeemer [('MyRedeemer, 0)]
 
 {-# INLINABLE mkValidator #-}
-mkValidator :: PPBParam -> () -> () -> ScriptContext -> Bool
-mkValidator p () () ctx =
-    hasSufficientAmount &&
-    signedByBeneficiary
+mkValidator :: () -> MyRedeemer -> ScriptContext -> Bool
+mkValidator _ (MyRedeemer isValid) ctx =
+    isValid &&
+    hasSufficientAmount
 
     where
-      contextInfo :: TxInfo
-      contextInfo = scriptContextTxInfo ctx
+      ownInput :: TxOut
+      ownInput = case findOwnInput ctx of
+        Nothing -> traceError "There are no inputs to consume"
+        Just i  -> txInInfoResolved i
 
       hasSufficientAmount :: Bool
       hasSufficientAmount =
-          traceIfFalse "Sorry. Not enough lovelace" $ checkAmount $ inValue contextInfo
-
-      signedByBeneficiary :: Bool
-      signedByBeneficiary =
-           traceIfFalse "Sorry. Not signed by beneficiary" $ txSignedBy contextInfo (beneficiary p)
+          traceIfFalse "Sorry. Not enough lovelace" $ checkAmount $ inValue ctx
 
 {-# INLINABLE inValue #-}
-inValue :: TxInfo -> Value
-inValue contextInfo = valueSpent contextInfo
+inValue :: TxOut -> Value
+inValue ctx = valueSpent (scriptContextTxInfo ctx)
+
+{-{-# INLINABLE inValue #-}
+inValue :: TxOut -> Value
+inValue ownInput = txOutValue ownInput-}
 
 {-# INLINABLE checkAmount #-}
 checkAmount :: Value -> Bool
@@ -82,58 +74,46 @@ checkAmount val = (assetClassValueOf val $ assetClass Ada.adaSymbol Ada.adaToken
 data Typed
 instance Scripts.ValidatorTypes Typed where
     type instance DatumType Typed    = ()
-    type instance RedeemerType Typed = ()
+    type instance RedeemerType Typed = MyRedeemer
 
-typedValidator :: PPBParam -> Scripts.TypedValidator Typed
-typedValidator p = Scripts.mkTypedValidator @Typed
-    ($$(PlutusTx.compile [|| mkValidator ||]) `PlutusTx.applyCode` PlutusTx.liftCode p)
+typedValidator :: Scripts.TypedValidator Typed
+typedValidator = Scripts.mkTypedValidator @Typed
+    $$(PlutusTx.compile [|| mkValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
     where
-        wrap = Scripts.wrapValidator @() @()
+        wrap = Scripts.wrapValidator @() @MyRedeemer
 
-validator :: PPBParam -> Validator
-validator p = Scripts.validatorScript $ typedValidator p
+validator :: Validator
+validator = Scripts.validatorScript typedValidator
 
-scrAddress :: PPBParam -> Ledger.Address
-scrAddress p = scriptAddress $ validator p
+valHash :: Ledger.ValidatorHash
+valHash = Scripts.validatorHash typedValidator
 
-data PutParams = PutParams
-    { pbBeneficiary :: !PubKeyHash
-    , amount      :: !Integer
-    } deriving (Generic, ToJSON, FromJSON, ToSchema)
+scrAddress :: Ledger.Address
+scrAddress = scriptAddress validator
 
-type ParametrisedPiggyBankSchema =
-            Endpoint "put" PutParams
-        .\/ Endpoint "empty" ()
-        .\/ Endpoint "inspect" ()
+type PiggyBank2Schema =
+            Endpoint "put" Integer
+        .\/ Endpoint "empty" MyRedeemer
+        .\/ Endpoint "inspect" MyRedeemer
 
-put :: AsContractError e => PutParams -> Contract w s e ()
-put pp = do
-    pk    <- Contract.ownPubKey
-    utxos <- utxoAt (pubKeyAddress pk)
+put :: AsContractError e => Integer -> Contract w s e ()
+put amount = do
+    utxos <- utxoAt scrAddress
     let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
     logInfo @String $ "Putting to piggy bank currently holding "
             ++ show numInputs
             ++ " outputs with a total value of "
             ++ show totalVal
-    let p  = PPBParam
-                  {
-                   beneficiary = pbBeneficiary pp
-                  }
-        tx = mustPayToTheScript () $ Ada.lovelaceValueOf $ amount pp
-    ledgerTx <- submitTxConstraints (typedValidator p) tx
+    let tx = mustPayToTheScript () $ Ada.lovelaceValueOf amount
+    ledgerTx <- submitTxConstraints typedValidator tx
     void $ awaitTxConfirmed $ txId ledgerTx
-    logInfo @String "Put %d lovelaces in the piggy bank" (amount pp)
-             ++ "for beneficiary pk hash"
-             ++ show $ beneficiary p
+    logInfo @String $ printf "Put %d lovelaces in the piggy bank" amount
 
-empty :: forall w s e. AsContractError e => Contract w s e ()
-empty = do
-    let p  = PPBParam
-                     { beneficiary = pubKeyHash <$> ownPubKey
-                     }
-    utxos <- utxoAt $ scrAddress p
+empty :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
+empty r = do
+    utxos <- utxoAt scrAddress
     let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
     logInfo @String
@@ -141,22 +121,18 @@ empty = do
             <> show numInputs
             <> " outputs with a total value of "
             <> show totalVal
-    let
-        orefs   = fst <$> Map.toList utxos
+    let orefs   = fst <$> Map.toList utxos     
         lookups = Constraints.unspentOutputs utxos <>
-                  Constraints.otherScript (validator p)
+                  Constraints.otherScript validator
         tx :: TxConstraints Void Void
-        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ PlutusTx.toData () | oref <- orefs]
+        tx      = mconcat [mustSpendScriptOutput oref $ Redeemer $ toBuiltinData r | oref <- orefs]
     ledgerTx <- submitTxConstraintsWith @Void lookups tx
     handleError (\err -> Contract.logInfo $ "caught error: " ++ unpack err) $ void $ awaitTxConfirmed $ txId ledgerTx
     logInfo @String $ "Emptied piggy bank."
 
-inspect :: forall w s e. AsContractError e => Contract w s e ()
-inspect = do
-    let p  = PPBParam
-                         { beneficiary = pubKeyHash <$> ownPubKey
-                         }
-    utxos <- utxoAt $ scrAddress p
+inspect :: forall w s e. AsContractError e => MyRedeemer -> Contract w s e ()
+inspect r = do
+    utxos <- utxoAt scrAddress
     let totalVal = Plutus.foldMap (txOutValue . txOutTxOut) $ snd <$> Map.toList utxos
         numInputs = Map.size utxos
     logInfo @String
@@ -168,20 +144,20 @@ inspect = do
             <> show (assetClassValueOf totalVal $ assetClass Ada.adaSymbol Ada.adaToken)
     logInfo @String $ "Inspect complete"
 
-put' :: Promise () ParametrisedPiggyBankSchema Text ()
+put' :: Promise () PiggyBank2Schema Text ()
 put' = endpoint @"put" put
 
-empty' :: Promise () ParametrisedPiggyBankSchema Text ()
+empty' :: Promise () PiggyBank2Schema Text ()
 empty' = endpoint @"empty" empty
 
-inspect' :: Promise () ParametrisedPiggyBankSchema Text ()
+inspect' :: Promise () PiggyBank2Schema Text ()
 inspect' = endpoint @"inspect" inspect
 
-endpoints :: AsContractError e => Contract () ParametrisedPiggyBankSchema Text e
+endpoints :: AsContractError e => Contract () PiggyBank2Schema Text e
 endpoints = do
     logInfo @String "Waiting for put or empty."
     selectList [put', empty', inspect'] >>  endpoints
 
 -- these functions are used in the simulator
-mkSchemaDefinitions ''ParametrisedPiggyBankSchema
+mkSchemaDefinitions ''PiggyBank2Schema
 mkKnownCurrencies []

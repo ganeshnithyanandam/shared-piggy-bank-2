@@ -22,7 +22,7 @@ import qualified Plutus.PAB.Effects.Contract.Builtin as Builtin
 import           Plutus.PAB.Simulator                (SimulatorEffectHandlers)
 import qualified Plutus.PAB.Simulator                as Simulator
 import qualified Plutus.PAB.Webserver.Server         as PAB.Server
-import           Plutus.Contracts.ParametrisedPiggyBank          as ParametrisedPiggyBank
+import           Plutus.Contracts.PiggyBank2          as PiggyBank2
 
 main :: IO ()
 main = void $ Simulator.runSimulationWith handlers $ do
@@ -39,7 +39,7 @@ main = void $ Simulator.runSimulationWith handlers $ do
     shutdown
 
 data StarterContracts =
-    ParametrisedPiggyBankContract
+    PiggyBank2Contract
     deriving (Eq, Ord, Show, Generic)
 
 instance ToJSON StarterContracts where
@@ -52,11 +52,11 @@ instance Pretty StarterContracts where
     pretty = viaShow
 
 instance Builtin.HasDefinitions StarterContracts where
-    getDefinitions = [ParametrisedPiggyBankContract]
+    getDefinitions = [PiggyBank2Contract]
     getSchema =  \case
-        ParametrisedPiggyBankContract -> Builtin.endpointsToSchemas @ParametrisedPiggyBank.ParametrisedPiggyBankSchema
+        PiggyBank2Contract -> Builtin.endpointsToSchemas @PiggyBank2.PiggyBank2Schema
     getContract = \case
-        ParametrisedPiggyBankContract -> SomeBuiltin (ParametrisedPiggyBank.endpoints @ContractError)
+        PiggyBank2Contract -> SomeBuiltin (PiggyBank2.endpoints @ContractError)
 
 handlers :: SimulatorEffectHandlers (Builtin StarterContracts)
 handlers =
