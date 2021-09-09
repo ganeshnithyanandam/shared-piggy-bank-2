@@ -71,7 +71,7 @@ After starting the PAB, you may want to run `./run.sh` to send some requests to 
 
 First, we activate four distinct wallets.
 
-Then in order this following requests and responses can be observed
+Then, in the following order,  requests and responses can be observed.
 
 - Wallet 1 puts 199999 lovelace
 - Wallet 2 puts 299999 lovelace
